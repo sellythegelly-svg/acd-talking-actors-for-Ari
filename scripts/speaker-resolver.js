@@ -75,7 +75,7 @@ export class SpeakerResolver {
         if (game.yendorsSceneActors &&
             game.yendorsSceneActors.show &&
             game.yendorsSceneActors.actorsDetail) {
-            return game.yendorsSceneActors.actorsDetail.find((t) => t._id == game.yendorsSceneActors.actorFocusId);
+            return game.yendorsSceneActors.actorsDetail.find((t) => t._id == game.yendorsSceneActors.itemFocusId);
         }
         return null;
     }
