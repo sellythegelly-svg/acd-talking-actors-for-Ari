@@ -17,27 +17,23 @@ export class TextToSpeechRequest extends ElevenlabsRequest {
     }
 
     async fetch() {
-        let body = {
-            "text": this.text,
-            "model_id": this.modelId, // "eleven_multilingual_v2"
-            "language_code": this.languageId  //"en"
-        };
-
-        if (this.settings) {
-            body = foundry.utils.mergeObject(body, {
-                "voice_settings": {
-                    "stability": this.settings.stability,
-                    "similarity_boost": this.settings.similarity_boost,
-                    "style": this.settings.style,
-                    "use_speaker_boost": "true"
-                }
-            });
+        let model = this.modelId || "elevenlabs/eleven-v4-turbo";
+        if (!model.startsWith("elevenlabs/")) {
+            model = `elevenlabs/${model.replace(/_/g, "-")}`;
         }
 
-        let response = await this.postData(`text-to-speech/${this.voiceId}`,
-            "audio/mpeg", JSON.stringify(body));
+        let body = {
+            "model": model,
+            "input": this.text,
+            "voice": this.voiceId || "sarah",
+            "response_format": "mp3"
+        };
+
+        let response = await this.postData(
+            `audio/speech`,
+            "audio/mpeg",
+            JSON.stringify(body)
+        );
         return response;
     }
 }
-
-
