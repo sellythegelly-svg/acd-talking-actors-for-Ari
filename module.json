@@ -1,9 +1,9 @@
 {
   "id": "acd-talking-actors",
-  "title": "Talking Actors",
-  "version": "#{VERSION}#",
+  "title": "Talking Actors for Ari (OpenRouter)",
+  "version": "2.0.0",
   "compatibility": {
-    "minimum": "13",
+    "minimum": "11",
     "verified": "14"
   },
   "languages": [
@@ -11,12 +11,12 @@
       "lang": "en",
       "name": "English",
       "path": "language/en.json"
-  },
-  {
-    "lang": "de",
-    "name": "Deutsch",
-    "path": "language/de.json"
-  }
+    },
+    {
+      "lang": "de",
+      "name": "Deutsch",
+      "path": "language/de.json"
+    }
   ],
   "styles": [
     "styles/context-menu.min.css",
@@ -30,18 +30,18 @@
     "scripts/libs/context-menu.min.js"
   ],
   "socket": true,
-  "description": "Enhances your tabletop experience by enabling actors and narrators to 'talk', with support for text-to-speech (TTS) integrationAn Elevenlabs subscription is required for the API Key.",
+  "description": "Enhances your tabletop experience by enabling actors and narrators to 'talk' via OpenRouter ElevenLabs integration.",
   "authors": [
     {
-      "name": "Acd-Jake",
+      "name": "Acd-Jake (OpenRouter Patch for Ari)",
       "discord": "Acd-Jake",
       "flags": {
-        "github": "acd-jake"
+        "github": "sellythegelly"
       }
     }
   ],
-  "url": "#{URL}#",
-  "download": "#{DOWNLOAD}#",
-  "manifest": "#{MANIFEST}#",
-  "bugs": "https://github.com/acd-jake/acd-talking-actors/issues"
+  "url": "https://github.com/sellythegelly/acd-talking-actors-for-Ari",
+  "download": "https://github.com/sellythegelly/acd-talking-actors-for-Ari/archive/refs/heads/main.zip",
+  "manifest": "https://raw.githubusercontent.com/sellythegelly/acd-talking-actors-for-Ari/main/module.json",
+  "bugs": "https://github.com/sellythegelly/acd-talking-actors-for-Ari/issues"
 }
