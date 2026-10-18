@@ -3,11 +3,21 @@ import { ELEVENLABS_CONSTANTS } from "../constants.js";
 export class ElevenlabsRequest {
     api_key;
     api_url = 'https://openrouter.ai/api/v1/';
+    connector;
 
     constructor(connector) {
-        this.api_key = game.settings.get(connector.mainSettingsId, ELEVENLABS_CONSTANTS.APIKEY);
-        if (this.api_key?.length < 1) {
-            this.api_key = game.settings.get(connector.mainSettingsId, ELEVENLABS_CONSTANTS.MASTERAPIKEY);
+        this.connector = connector;
+        if (connector && typeof connector.getApiKey === "function") {
+            this.api_key = connector.getApiKey();
+        } else {
+            try {
+                this.api_key = game.settings.get(connector.mainSettingsId, ELEVENLABS_CONSTANTS.APIKEY);
+            } catch(e) {}
+            if (!this.api_key || this.api_key.length < 1) {
+                try {
+                    this.api_key = game.settings.get(connector.mainSettingsId, ELEVENLABS_CONSTANTS.MASTERAPIKEY);
+                } catch(e) {}
+            }
         }
     }
 
@@ -63,8 +73,10 @@ export class ElevenlabsRequest {
 
     checkResponseStatus(response) {
         if (response.status !== 200 && response.status !== 201) {
-            this.logger?.error(`TTS request failed with status ${response.status}, detail: ${response.detail?.message || 'No additional information.'}`);
-            this._speaking = false;
+            console.error(`TTS request failed with status ${response.status}`);
+            if (this.connector) {
+                this.connector._speaking = false;
+            }
             return false;
         }
         return true;
