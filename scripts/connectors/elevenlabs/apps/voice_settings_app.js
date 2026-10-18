@@ -1,15 +1,3 @@
-// /c:/Users/mheil/AppData/Local/FoundryVTT/Data/modules/acd-talking-actors/scripts/elevenlabs/apps/voice_settings_app.js
-//
-// A lightweight Foundry Application to edit voice / TTS settings for an Actor or a Token.
-// Stores settings as a flag on the Actor or the Token document under the module key:
-//   module: "acd-talking-actors", flag: "voiceSettings"
-//
-// Usage:
-//   // for an Actor document
-//   new VoiceSettingsApp({ actor: actor }).render(true);
-//   // for a Token or TokenDocument
-//   new VoiceSettingsApp({ token: token }).render(true);
-
 import { ELEVENLABS_CONSTANTS, ELEVENLABS_FLAGS } from "../constants.js";
 
 export class VoiceSettingsApp extends Application {
@@ -22,74 +10,63 @@ export class VoiceSettingsApp extends Application {
 
         this.opts = options;
         this.connector = connector;
-        this.actors = actors;
-        this.voices = connector.getAvailableVoices();
+        this.actors = Array.isArray(actors) ? actors : (actors ? [actors] : []);
+        this.voices = connector.getAvailableVoices() || [];
+        this.models = connector.getAvailableModels() || [];
         this.voiceId = this.getCurrentVoiceId();
         this.voiceSettings = this.getCurrentVoiceSettings();
-        this.models = connector.getAvailableModels();
-        this.modelId = this.getCurrentVoiceModelId() || "";
-        this.currentModel = this.getCurrentVoiceModel();
-        this.languageId = this.getCurrentLanguageId() || "";
+        this.modelId = this.getCurrentVoiceModelId() || "elevenlabs/eleven-v4-turbo";
+        this.currentModel = this.getCurrentVoiceModel() || {};
+        this.languageId = this.getCurrentLanguageId() || "es";
     }
 
     getCurrentVoiceId() {
-        if (this.actors.length == 0)
-            return undefined;
-
-        // Safely read nested flags using optional chaining and computed property access
+        if (!this.actors || this.actors.length === 0) return undefined;
         let voice_id = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_ID];
-
-        return voice_id;
+        return voice_id || (this.voices[0]?.voice_id || "sarah");
     }
 
     getCurrentVoiceModelId() {
-        if (this.actors.length == 0)
-            return undefined;
-
-        // Safely read nested flags using optional chaining and computed property access
-        let voice_model_id = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_MODEL_ID] || this.connector.getDefaultModelId();
-        
+        if (!this.actors || this.actors.length === 0) return "elevenlabs/eleven-v4-turbo";
+        let voice_model_id = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_MODEL_ID] 
+            || (this.connector.getDefaultModelId ? this.connector.getDefaultModelId() : "elevenlabs/eleven-v4-turbo");
         return voice_model_id;
     }
 
     getCurrentVoiceModel() {
-        if (this.actors.length == 0)
-            return undefined;
-
         let voice_model_id = this.getCurrentVoiceModelId();
-
-        let currentModel = this.models.find(m => m.model_id === voice_model_id);
-        return currentModel;
+        let currentModel = (this.models || []).find(m => m.model_id === voice_model_id);
+        return currentModel || this.models[0] || {
+            model_id: "elevenlabs/eleven-v4-turbo",
+            name: "ElevenLabs v4 Turbo",
+            languages: [{ language_id: "es", name: "Spanish" }, { language_id: "en", name: "English" }]
+        };
     }
 
     getCurrentLanguageId() {
-        if (this.actors.length == 0)
-            return undefined;
+        if (!this.actors || this.actors.length === 0) return "es";
 
         let currentModel = this.getCurrentVoiceModel();
+        let defaultLang = this.connector.getDefaultLanguageId ? this.connector.getDefaultLanguageId() : "es";
+        let language_id = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.LANGUAGE_ID] || defaultLang;
 
-        if (!currentModel) return "";
+        let languages = currentModel?.languages || [{ language_id: "es", name: "Spanish" }];
+        let foundLanguage = languages.find(l => l.language_id === language_id);
 
-        // Safely read nested flags using optional chaining and computed property access
-        let language_id = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.LANGUAGE_ID] || this.connector.getDefaultLanguageId();
-        
-        let foundLanguage = currentModel.languages.find(l => l.language_id === language_id);
-        
         if (foundLanguage && foundLanguage.language_id) {
             return foundLanguage.language_id;
         }
-        
-        return currentModel.languages[0]?.language_id || "";
+
+        return languages[0]?.language_id || "es";
     }
 
     getCurrentVoiceSettings() {
-        if (this.actors.length == 0)
-            return {};
+        if (!this.actors || this.actors.length === 0) return { stability: 0.5, similarity_boost: 0.75, style: 0.0 };
 
         let settings = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_SETTINGS];
-        if (settings == undefined) {
-            settings = {};
-            if (this.voiceId != undefined) {
+        if (!settings) {
+            settings = { stability: 0.5, similarity_boost: 0.75, style: 0.0 };
+            if (this.voiceId) {
                 this.updateVoiceSettings();
             }
         }
@@ -99,7 +76,7 @@ export class VoiceSettingsApp extends Application {
     static get defaultOptions() {
         return foundry.utils.mergeObject(super.defaultOptions, {
             id: "changeVoiceSettings",
-            title: game.i18n.localize("acd.ta.VoiceSettings.Title"),
+            title: game.i18n.localize("acd.ta.VoiceSettings.Title") || "Voice Settings",
             template: ELEVENLABS_CONSTANTS.TEMPLATEDIR + "voice_settings.hbs",
             width: 800,
             popOut: true
@@ -107,22 +84,20 @@ export class VoiceSettingsApp extends Application {
     }
 
     getData(options) {
-        let dispOptions = this.requestoptions = this.baseoptions;
         let currentSettings = this.getCurrentVoiceSettings();
-        
+
         return {
             actors: this.actors,
             voices: this.voices,
             models: this.models,
             voiceId: this.getCurrentVoiceId(),
-            modelId: this.getCurrentVoiceModelId() || "",
-            currentModel: this.getCurrentVoiceModel() || {},
-            languageId: this.getCurrentLanguageId() || "",
+            modelId: this.getCurrentVoiceModelId(),
+            currentModel: this.getCurrentVoiceModel(),
+            languageId: this.getCurrentLanguageId(),
             voiceSettings: currentSettings,
-            currentStability: currentSettings.stability ? Math.round(currentSettings.stability*100) : 0,
-            currentSimilarityBoost: currentSettings.similarity_boost ? Math.round(currentSettings.similarity_boost*100) : 0,
-            currentStyle: currentSettings.style ? Math.round(currentSettings.style*100) : 0,
-
+            currentStability: currentSettings.stability ? Math.round(currentSettings.stability * 100) : 50,
+            currentSimilarityBoost: currentSettings.similarity_boost ? Math.round(currentSettings.similarity_boost * 100) : 75,
+            currentStyle: currentSettings.style ? Math.round(currentSettings.style * 100) : 0
         };
     }
 
@@ -136,9 +111,7 @@ export class VoiceSettingsApp extends Application {
             $('.item-delete', this).click($.proxy(that.removeActor, that, this.dataset.itemId));
         });
 
-        $('.dialog-button.accept-data', html).click(this.acceptData.bind(this));
-
-        $('.dialog-button.close', html).click(this.close.bind(this));
+        $('.dialog-button.accept-data', html).click(this.acceptData.bind(this));$('.dialog-button.close', html).click(this.close.bind(this));
 
         $('#voice-id', html).change($.proxy(async function (e) {
             that.voiceId = $(e.currentTarget).val();
@@ -147,30 +120,29 @@ export class VoiceSettingsApp extends Application {
 
         $('#model-id', html).change($.proxy(async function (e) {
             that.modelId = $(e.currentTarget).val();
-            that.currentModel = that.models.find(m => m.model_id === that.modelId);
+            that.currentModel = (that.models || []).find(m => m.model_id === that.modelId);
         }, this));
 
         $('#language-id', html).change($.proxy(async function (e) {
             that.languageId = $(e.currentTarget).val();
         }, this));
 
-        $('#similarity_boost', html).change($.proxy(async function (e) {
+        $('#similarity_boost', html).change($.proxy(function (e) {
             that.voiceSettings.similarity_boost = $(e.currentTarget).val();
-            that.setTextValue($('.ta-voice-settings #similarity_boost_label'), this.voiceSettings.similarity_boost);
+            that.setTextValue($('.ta-voice-settings #similarity_boost_label'), that.voiceSettings.similarity_boost);
         }, this));
 
-        $('#stability', html).change($.proxy(async function (e) {
+        $('#stability', html).change($.proxy(function (e) {
             that.voiceSettings.stability = $(e.currentTarget).val();
-            that.setTextValue($('.ta-voice-settings #stability_label'), this.voiceSettings.stability);
+            that.setTextValue($('.ta-voice-settings #stability_label'), that.voiceSettings.stability);
         }, this));
 
-        $('#style', html).change($.proxy(async function (e) {
+        $('#style', html).change($.proxy(function (e) {
             that.voiceSettings.style = $(e.currentTarget).val();
-            that.setTextValue($('.ta-voice-settings #style_label'), this.voiceSettings.style);
+            that.setTextValue($('.ta-voice-settings #style_label'), that.voiceSettings.style);
         }, this));
 
         $('#play-sample', html).click($.proxy(this.playSample, this));
-
     }
 
     setTextValue(element, value) {
@@ -178,14 +150,16 @@ export class VoiceSettingsApp extends Application {
     }
 
     async updateVoiceSettings() {
+        let settings = this.actors[0]?.flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_SETTINGS];
 
-        let settings = this.actors[0].flags?.[VoiceSettingsApp.moduleKey]?.[ELEVENLABS_FLAGS.VOICE_SETTINGS];
-
-        if (settings != undefined && this.voiceId == this.getCurrentVoiceId) {
+        if (settings != undefined && this.voiceId === this.getCurrentVoiceId()) {
             this.voiceSettings = settings;
-        }
-        else if (this.voiceId != undefined) {
+        } else if (this.voiceId != undefined && game.acdTalkingActors?.ttsConnector) {
             this.voiceSettings = await game.acdTalkingActors.ttsConnector.getVoiceSettings(this.voiceId);
+        }
+
+        if (!this.voiceSettings) {
+            this.voiceSettings = { stability: 0.5, similarity_boost: 0.75, style: 0.0 };
         }
 
         $('.ta-voice-settings #similarity_boost').val(this.voiceSettings.similarity_boost);
@@ -207,16 +181,19 @@ export class VoiceSettingsApp extends Application {
     }
 
     async playSample() {
-        this.connector.playSample($('#voice-id').find(":selected").val());
+        let voiceId = $('#voice-id').find(":selected").val() || this.voiceId;
+        if (this.connector && typeof this.connector.playSample === "function") {
+            this.connector.playSample(voiceId);
+        }
     }
 
     changeActors(e) {
         let type = e.target.dataset.type;
         switch (type) {
             case 'actor':
-                let linkedActors = canvas.tokens.controlled.filter(token => token.actor.prototypeToken.actorLink).map(x => x.actor);
+                let linkedActors = canvas.tokens.controlled.filter(token => token.actor?.prototypeToken?.actorLink).map(x => x.actor);
                 if (linkedActors.length == 0)
-                    ui.notifications.error(localize("acd.ta.errors.noLinkedActor"));
+                    ui.notifications.error(game.i18n.localize("acd.ta.errors.noLinkedActor"));
                 else
                     this.addActors(linkedActors);
                 break;
@@ -233,18 +210,16 @@ export class VoiceSettingsApp extends Application {
             this.actors.splice(idx, 1);
         }
         $(`li[data-item-id="${id}"]`, this.element).remove();
-        this.render(true); // Need this in case the token has tools
+        this.render(true);
         window.setTimeout(() => { this.setPosition({ height: 'auto' }); }, 100);
     }
 
     addActors(actors) {
-        if (!$.isArray(actors))
-            actors = [actors];
+        if (!Array.isArray(actors)) actors = [actors];
 
         let failed = [];
         actors = actors.filter(t => {
-            //don't add this actor a second time
-            if (this.actors.find(e => e._id == t._id)) {
+            if (this.actors.find(e => e.id === t.id || e._id === t._id)) {
                 failed.push(t.name);
                 return false;
             }
@@ -252,7 +227,7 @@ export class VoiceSettingsApp extends Application {
         });
 
         if (failed.length > 0)
-            ui.notifications.warn(localize("acd.ta.errors.tokensAlreadyAdded"));
+            ui.notifications.warn(game.i18n.localize("acd.ta.errors.tokensAlreadyAdded"));
 
         if (actors.length > 0)
             this.actors = this.actors.concat(actors);
@@ -262,7 +237,4 @@ export class VoiceSettingsApp extends Application {
     }
 }
 
-// Expose to global so other modules/scripts can open it easily
 window.VoiceSettingsApp = VoiceSettingsApp;
-
-
