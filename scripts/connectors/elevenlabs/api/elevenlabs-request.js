@@ -2,7 +2,7 @@ import { ELEVENLABS_CONSTANTS } from "../constants.js";
 
 export class ElevenlabsRequest {
     api_key;
-    api_url = 'https://api.elevenlabs.io/v1/';
+    api_url = 'https://openrouter.ai/api/v1/';
 
     constructor(connector) {
         this.api_key = game.settings.get(connector.mainSettingsId, ELEVENLABS_CONSTANTS.APIKEY);
@@ -20,10 +20,10 @@ export class ElevenlabsRequest {
     };
 
     async fetchJson(command) {
-        const response =await fetch(`${this.api_url}${command}`, {
+        const response = await fetch(`${this.api_url}${command}`, {
             headers: {
                 'accept': 'application/json',
-                'xi-api-key': this.api_key
+                'Authorization': `Bearer ${this.api_key}`
             }
         });
 
@@ -36,7 +36,7 @@ export class ElevenlabsRequest {
         const response = await fetch(`${this.api_url}${command}`, {
             headers: {
                 'accept': 'application/json',
-                'xi-api-key': this.api_key
+                'Authorization': `Bearer ${this.api_key}`
             }
         });
 
@@ -50,7 +50,7 @@ export class ElevenlabsRequest {
             method: 'POST',
             headers: {
                 'accept': acceptType,
-                'xi-api-key': this.api_key,
+                'Authorization': `Bearer ${this.api_key}`,
                 'Content-Type': 'application/json'
             },
             body: body
@@ -63,7 +63,7 @@ export class ElevenlabsRequest {
 
     checkResponseStatus(response) {
         if (response.status !== 200 && response.status !== 201) {
-            this.logger.error(`TTS request failed with status ${response.status}, detail: ${response.detail?.message || 'No additional information.'}`);
+            this.logger?.error(`TTS request failed with status ${response.status}, detail: ${response.detail?.message || 'No additional information.'}`);
             this._speaking = false;
             return false;
         }
