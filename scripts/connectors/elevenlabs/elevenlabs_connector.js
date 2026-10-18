@@ -24,7 +24,7 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     get label() {
-        return "Elevenlabs Connector";
+        return "Elevenlabs Connector (OpenRouter)";
     }
 
     getSettingsSchema() {
@@ -37,15 +37,13 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     registerAdditionalSettings() {
-        // Register any additional settings specific to this connector that are dependent on the module being initialized
-
         if (!game.settings.settings.has(`${this.mainSettingsId}.${ELEVENLABS_CONSTANTS.DEFAULT_MODEL}`)) {
             game.settings.register(this.mainSettingsId, ELEVENLABS_CONSTANTS.DEFAULT_MODEL, {
                 name: "acd.ta.settings.DefaultModel",
                 hint: "acd.ta.settings.DefaultModelHint",
                 scope: "client",
                 config: true,
-                default: "eleven_multilingual_v2",
+                default: "elevenlabs/eleven-v4-turbo",
                 type: String,
                 choices: this.settingsModelChoices,
             });
@@ -57,47 +55,39 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
                 hint: "acd.ta.settings.DefaultLanguageHint",
                 scope: "client",
                 config: true,
-                default: "en",
+                default: "es",
                 type: String,
                 choices: this.settingsLanguageChoices,
             });
         }
-
     }
 
     get settingsModelChoices() {
         let modelChoices = {};
-        this.models.forEach(m => {
+        (this.models || []).forEach(m => {
             modelChoices[m.model_id] = m.name;
         });
         return modelChoices;
     }
 
     get settingsLanguageChoices() {
-        let languageChoices = {};
-        this.models.forEach(m => {
-            m.languages.forEach(l => {
-                languageChoices[l.language_id] = `${l.name}`;
-            });
-        });
-        return languageChoices;
+        return {
+            "es": "Spanish (Español)",
+            "en": "English",
+            "de": "German",
+            "fr": "French",
+            "it": "Italian",
+            "pt": "Portuguese"
+        };
     }
 
-    /**
-     * Initialize connector (read settings, prepare SDKs, etc).
-     * @param {object} [settings] - optionally pass current settings object
-     * @returns {Promise<void>|void}
-     */
     async init(settings = {}) {
-        // Custom initialization logic for ElevenlabsConnector
         this.logger.debug("Initializing with settings:", settings);
-        // You can add more setup here as needed
 
         Mp3Utils.init();
 
         await this.initializeAvailableVoices();
         await this.initializeUserdata();
-
         await this.initializeModels();
 
         this.registerAdditionalSettings();
@@ -125,9 +115,10 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
             event.preventDefault();
             event.stopPropagation();
 
-            new GenerateSoundEffectsApp(this, logger).render(true);
+            new GenerateSoundEffectsApp(this, this.logger).render(true);
         });
     }
+
     async initializeModels() {
         if (!this.hasApiKey("API key not set. Cannot fetch available models.")) {
             return;
@@ -136,7 +127,7 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
         this.logger.debug("Fetching available models...");
         try {
             const remoteModels = await new api.ListModelsRequest(this).fetch();
-            this.models = remoteModels;
+            this.models = remoteModels || [];
             this.logger.debug("Available models:", this.models);
         } catch (err) {
             this.logger.error("Error fetching available models:", err);
@@ -149,12 +140,10 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
         }
 
         this.availableVoices = [];
-
         this.logger.debug("Fetching available voices...");
         try {
             const remoteVoices = await new api.GetVoicesRequest(this).fetch();
-            this.availableVoices = remoteVoices;
-
+            this.availableVoices = remoteVoices || [];
             this.logger.debug("Available voices:", this.availableVoices);
         } catch (err) {
             this.logger.error("Error fetching available voices:", err);
@@ -176,12 +165,39 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     hasApiKey(warn) {
-        const hasKey = (game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.APIKEY)?.length > 1)
-            || (game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.MASTERAPIKEY)?.length > 1);
+        const key = this.getApiKey();
+        const hasKey = typeof key === "string" && key.trim().length > 1;
         if (!hasKey && warn) {
             this.logger.warn(warn);
         }
         return hasKey;
+    }
+
+    getApiKey() {
+        let key = "";
+        try {
+            key = game.settings.get(this.mainSettingsId, ELEVENLABS_CONSTANTS.APIKEY);
+        } catch (e) {}
+
+        if (!key || key.trim().length === 0) {
+            try {
+                key = game.settings.get(this.mainSettingsId, ELEVENLABS_CONSTANTS.MASTERAPIKEY);
+            } catch (e) {}
+        }
+
+        if (!key || key.trim().length === 0) {
+            try {
+                key = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.APIKEY);
+            } catch (e) {}
+        }
+
+        if (!key || key.trim().length === 0) {
+            try {
+                key = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.MASTERAPIKEY);
+            } catch (e) {}
+        }
+
+        return key ? key.trim() : "";
     }
 
     async openVoiceSettingsApp(actors) {
@@ -200,7 +216,7 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     getVoiceId(voiceName) {
         const voices = this.getAvailableVoices();
         const voice = voices.find(v => v.name === voiceName);
-        return voice ? voice.id : null;
+        return voice ? voice.voice_id : null;
     }
 
     getVoiceIdAndSettingsFromActor(actor) {
@@ -210,23 +226,19 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     getVoiceIdFromActor(actor) {
-        const voiceId = this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_ID);
-        return voiceId;
+        return this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_ID);
     }
 
     getModelIdFromActor(actor) {
-        const modelId = this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_MODEL_ID) || this.getDefaultModelId();
-        return modelId;
+        return this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_MODEL_ID) || this.getDefaultModelId();
     }
 
     getLanguageIdFromActor(actor) {
-        const languageId = this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.LANGUAGE_ID) || this.getDefaultLanguageId();
-        return languageId;
+        return this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.LANGUAGE_ID) || this.getDefaultLanguageId();
     }
 
     getVoiceSettingsFromActor(actor) {
-        const settings = this.getObjectFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_SETTINGS);
-        return settings;
+        return this.getObjectFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_SETTINGS);
     }
 
     async getVoiceSettings(voiceId) {
@@ -243,11 +255,9 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
             return null;
         }
 
-        // Convert text to speech using the elevenlabs API
-        this.logger.info(`Speaking:`, text,);
+        this.logger.info(`Speaking:`, text);
         this._speaking = true;
 
-        // check if voiceId is valid
         if (voiceId == null || !this.availableVoices.find(v => v.voice_id === voiceId)) {
             this.logger.error("Invalid voice ID:", voiceId);
             this._speaking = false;
@@ -275,18 +285,17 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
             return null;
         }
 
-        let historyItemId = response.headers.get("history-item-id");
+        let historyItemId = response.headers.get("history-item-id") || "openrouter-audio";
 
         this.logger.debug("TTS history item ID:", historyItemId);
 
         let chunks = await this.readChunks(response);
 
-        // Emit audio chunks to socket for playback or further processing
         game.socket.emit('module.' + this.mainModule.id, {
             container: chunks,
             historyItemId: historyItemId,
             text: text
-        })
+        });
 
         this.playSound(chunks);
 
@@ -297,50 +306,30 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
         if (!actor) {
             return this.getDefaultLanguageId();
         }
-
-        let languageId = this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.LANGUAGE_ID);
-
-        if (languageId == null || !this.models.find(m => m.languages.find(l => l.language_id === languageId))) {
-            this.logger.debug("Invalid language ID:", languageId);
-            languageId = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.DEFAULT_LANGUAGE) || null;
-
-            if (languageId == null || !this.models.find(m => m.languages.find(l => l.language_id === languageId))) {
-                this.logger.debug("No valid default language ID set:", languageId);
-                languageId = this.models.find(m => m.model_id === modelId).languages[0].language_id;
-                this.logger.info("Falling back to default language ID:", this.languageId);
-            }
-        }
-        return languageId;
+        return this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.LANGUAGE_ID) || this.getDefaultLanguageId();
     }
 
     getDefaultLanguageId() {
-        let defaultLanguageId = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.DEFAULT_LANGUAGE) || null;
-        return defaultLanguageId;
+        try {
+            return game.settings.get(this.mainSettingsId, ELEVENLABS_CONSTANTS.DEFAULT_LANGUAGE) || "es";
+        } catch (e) {
+            return "es";
+        }
     }
 
     retrieveModelId(actor) {
         if (!actor) {
             return this.getDefaultModelId();
         }
-
-        let modelId = this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_MODEL_ID);
-
-        if (modelId == null || !this.models.find(m => m.model_id === modelId)) {
-            this.logger.debug("Invalid model ID:", modelId);
-            modelId = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.DEFAULT_MODEL) || null;
-
-            if (modelId == null || !this.models.find(m => m.model_id === modelId)) {
-                this.logger.debug("No valid default model ID set:", modelId);
-                modelId = this.models[0].model_id;
-                this.logger.info("Falling back to first available model ID:", this.models[0].model_id);
-            }
-        }
-        return modelId;
+        return this.getStringFlagFromActor(actor, ELEVENLABS_FLAGS.VOICE_MODEL_ID) || this.getDefaultModelId();
     }
 
     getDefaultModelId() {
-        let defaultModelId = game.settings.get(this.mainModule.id, ELEVENLABS_CONSTANTS.DEFAULT_MODEL) || null;
-        return defaultModelId;
+        try {
+            return game.settings.get(this.mainSettingsId, ELEVENLABS_CONSTANTS.DEFAULT_MODEL) || "elevenlabs/eleven-v4-turbo";
+        } catch (e) {
+            return "elevenlabs/eleven-v4-turbo";
+        }
     }
 
     async stop() {
@@ -348,7 +337,6 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     async generateAudioData(text, options = {}) {
-        // Example: return null
         return null;
     }
 
@@ -364,15 +352,15 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
     }
 
     async playSound(chunks) {
-        let blob = new Blob(chunks, { type: 'audio/mpeg' })
-        let url = window.URL.createObjectURL(blob)
+        let blob = new Blob(chunks, { type: 'audio/mpeg' });
+        let url = window.URL.createObjectURL(blob);
         let sound = this.playAudio(url);
         let resolvedSound = Promise.resolve(sound);
         resolvedSound.then((soundInfo) => {
             console.log(soundInfo);
             this._speaking = false;
             this.logger.info("Finished playing sound.");
-        })
+        });
     }
 
     async playAudio(url) {
@@ -385,29 +373,23 @@ export default class ElevenlabsConnector extends TTSConnectorInterface {
 
     async playSample(voiceId) {
         let voice = this.availableVoices.find(t => t.voice_id === voiceId);
-
-        if (voice) {
+        if (voice && voice.preview_url) {
             this.playAudio(voice.preview_url);
         }
     }
 
     async replaySpeech(itemId) {
         let container = await new api.GetAudioFromHistoryItemRequest(this, itemId).fetch();
-
         let chunks = await this.readChunks(container);
         game.socket.emit('module.' + this.mainModule.id, {
             container: chunks,
             historyItemId: itemId,
             text: ""
-        })
-
+        });
         this.playSound(chunks);
-
     }
 }
-
 
 Hooks.on("acdTalkingActors.registerTtsConnector", (mainModule, logger) => {
     mainModule.registerTtsConnector(new ElevenlabsConnector(mainModule, logger));
 });
-
